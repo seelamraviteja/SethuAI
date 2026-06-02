@@ -1,0 +1,32 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Sample Pet Store", "version": "1.0.0", "description": "A tiny demo API." },
+  "servers": [{ "url": "https://petstore3.swagger.io/api/v3" }],
+  "paths": {
+    "/pet/findByStatus": {
+      "get": {
+        "operationId": "findPetsByStatus",
+        "summary": "Find pets by status",
+        "parameters": [
+          { "name": "status", "in": "query", "required": false, "schema": { "type": "string", "enum": ["available", "pending", "sold"] } }
+        ]
+      }
+    },
+    "/pet/{petId}": {
+      "get": {
+        "operationId": "getPetById",
+        "summary": "Find pet by ID",
+        "parameters": [
+          { "name": "petId", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" } }
+        ]
+      },
+      "delete": {
+        "operationId": "deletePet",
+        "summary": "Deletes a pet",
+        "parameters": [
+          { "name": "petId", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ]
+      }
+    }
+  }
+}

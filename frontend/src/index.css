@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+@theme {
+  --color-base: #0a0b0f;
+  --color-panel: #101218;
+  --color-accent: #7c5cff;
+  --color-accent-2: #22d3ee;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-base);
+  color: #e6e8ef;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* Subtle dual glow — the "popping" without being loud. */
+  background-image:
+    radial-gradient(900px 500px at 12% -10%, rgba(124, 92, 255, 0.18), transparent 60%),
+    radial-gradient(800px 500px at 100% 0%, rgba(34, 211, 238, 0.12), transparent 55%);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(124, 92, 255, 0.35);
+}
+
+/* Slim, quiet scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fade-up 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
