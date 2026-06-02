@@ -10,7 +10,7 @@ import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from . import audit, mcp_runtime, security, storage
+from . import audit, mcp_runtime, net, security, storage
 from .generator import generate_catalog, slugify
 from .models import Catalog
 
@@ -52,7 +52,9 @@ def _load_spec(content: str) -> dict:
     try:
         data = yaml.safe_load(content)
     except yaml.YAMLError as exc:
-        raise HTTPException(status_code=400, detail=f"Could not parse spec as JSON or YAML: {exc}")
+        raise HTTPException(
+            status_code=400, detail=f"Could not parse spec as JSON or YAML: {exc}"
+        ) from exc
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Spec did not parse to an object.")
     return data
@@ -69,12 +71,20 @@ async def parse_spec(req: ParseRequest) -> Catalog:
     content = req.content
     if req.url:
         try:
+            net.validate_url(req.url)
+        except net.BlockedHostError as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Refused to fetch spec URL: {exc}"
+            ) from exc
+        try:
             async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
                 resp = await client.get(req.url)
                 resp.raise_for_status()
                 content = resp.text
         except httpx.HTTPError as exc:
-            raise HTTPException(status_code=400, detail=f"Could not fetch spec URL: {exc}")
+            raise HTTPException(
+                status_code=400, detail=f"Could not fetch spec URL: {exc}"
+            ) from exc
     spec = _load_spec(content)
     catalog = generate_catalog(spec)
     if not catalog.tools:

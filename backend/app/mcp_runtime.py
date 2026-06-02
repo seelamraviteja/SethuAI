@@ -7,19 +7,18 @@ Each tool call is translated into an HTTP request against the catalog's backend.
 """
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
 import mcp.types as types
 from mcp.server.lowlevel import Server
 
-from . import audit, storage
+from . import audit, config, net, storage
 from .generator import build_input_schema
 from .models import Catalog, ToolDef
 
 server: Server = Server("sethuai")
-
-MAX_RESPONSE_CHARS = 50_000
 
 
 def _prefixed(slug: str, tool_name: str) -> str:
@@ -114,8 +113,16 @@ async def invoke(
         return "Error: catalog has no base_url configured."
 
     url, query, headers, body, httpx_auth = _build_request(catalog, tool, arguments)
+
     try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        net.validate_url(url)
+    except net.BlockedHostError as exc:
+        audit.record({**base, "ok": False, "status": None, "error": f"blocked: {exc}"})
+        return f"Blocked: {exc}"
+
+    timeout = tool.timeout_seconds or config.http_timeout()
+    try:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             response = await client.request(
                 tool.method.upper(),
                 url,
@@ -130,10 +137,42 @@ async def invoke(
 
     audit.record({**base, "ok": response.is_success, "status": response.status_code})
 
-    text = response.text
-    if len(text) > MAX_RESPONSE_CHARS:
-        text = text[:MAX_RESPONSE_CHARS] + "\n…[response truncated]"
-    return f"HTTP {response.status_code} {response.reason_phrase}\n\n{text}"
+    body_text = _shape_response(response.text, response.headers.get("content-type", ""))
+    return f"HTTP {response.status_code} {response.reason_phrase}\n\n{body_text}"
+
+
+def _shape_response(text: str, content_type: str) -> str:
+    """Cap an oversized response, staying valid JSON when we can.
+
+    For a JSON array we keep as many leading items as fit under the budget and
+    append a machine-readable note about how many were dropped — far more useful
+    to a model than a mid-token character cut. Everything else falls back to a
+    plain truncation marker.
+    """
+    limit = config.max_response_chars()
+    if len(text) <= limit:
+        return text
+
+    if "json" in content_type.lower():
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
+        if isinstance(data, list) and data:
+            kept = list(data)
+            while len(kept) > 1:
+                shaped = json.dumps(kept)
+                if len(shaped) <= limit:
+                    omitted = len(data) - len(kept)
+                    if not omitted:  # re-serialized compact JSON already fits
+                        return shaped
+                    note = f"\n…[truncated: {omitted} of {len(data)} items omitted]"
+                    return shaped + note
+                # Drop ~10% of the remaining items each pass to converge fast.
+                kept = kept[: max(1, len(kept) - max(1, len(kept) // 10))]
+            # A single item still over budget falls through to char truncation.
+
+    return text[:limit] + "\n…[response truncated]"
 
 
 @server.call_tool()

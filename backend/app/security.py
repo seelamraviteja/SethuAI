@@ -10,6 +10,7 @@ a warning so an open deployment is never silent.
 """
 from __future__ import annotations
 
+import hmac
 import os
 
 from fastapi import Header, HTTPException
@@ -21,6 +22,13 @@ def _extract(authorization: str, header_token: str) -> str:
     return header_token.strip()
 
 
+def _tokens_match(presented: str, expected: str) -> bool:
+    # Constant-time compare so a wrong token can't be recovered by timing the
+    # response. hmac.compare_digest needs equal-length inputs to be meaningful,
+    # which it handles internally without leaking length via early-return.
+    return hmac.compare_digest(presented.encode(), expected.encode())
+
+
 def require_admin(
     authorization: str = Header(default=""),
     x_admin_token: str = Header(default=""),
@@ -28,7 +36,7 @@ def require_admin(
     expected = os.environ.get("SETHU_ADMIN_TOKEN")
     if not expected:
         return  # open mode
-    if _extract(authorization, x_admin_token) != expected:
+    if not _tokens_match(_extract(authorization, x_admin_token), expected):
         raise HTTPException(status_code=401, detail="Invalid or missing admin token.")
 
 
@@ -36,7 +44,7 @@ def check_mcp_token(authorization: str, x_api_key: str = "") -> bool:
     expected = os.environ.get("SETHU_MCP_TOKEN")
     if not expected:
         return True  # open mode
-    return _extract(authorization, x_api_key) == expected
+    return _tokens_match(_extract(authorization, x_api_key), expected)
 
 
 def auth_status() -> dict[str, bool]:

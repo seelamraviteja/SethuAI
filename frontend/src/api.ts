@@ -31,6 +31,7 @@ export interface ToolDef {
   params: ParamDef[];
   request_body_schema: any | null;
   request_body_required: boolean;
+  timeout_seconds: number | null;
 }
 
 export interface Catalog {

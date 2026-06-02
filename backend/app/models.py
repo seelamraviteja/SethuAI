@@ -7,7 +7,7 @@ so a single runtime can serve many APIs and pick up edits live.
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -57,8 +57,10 @@ class ToolDef(BaseModel):
     method: str
     path: str
     params: list[ParamDef] = Field(default_factory=list)
-    request_body_schema: Optional[dict[str, Any]] = None
+    request_body_schema: dict[str, Any] | None = None
     request_body_required: bool = False
+    # Per-tool request timeout override (seconds). None = use the server default.
+    timeout_seconds: float | None = None
 
 
 class Catalog(BaseModel):

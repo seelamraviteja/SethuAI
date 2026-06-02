@@ -297,6 +297,16 @@ function ToolRow({
               Mark destructive (flagged to the model in the tool description)
             </span>
           </label>
+          <Field label="Request timeout (seconds — blank uses the server default)">
+            <Input
+              value={tool.timeout_seconds == null ? "" : String(tool.timeout_seconds)}
+              onChange={(v) => {
+                const n = parseFloat(v);
+                onPatch({ timeout_seconds: v.trim() === "" || isNaN(n) ? null : n });
+              }}
+              placeholder="30"
+            />
+          </Field>
 
           {/* Test panel */}
           <div className="rounded-xl border border-white/[0.06] bg-black/30 p-3">

@@ -5,6 +5,11 @@
 Turn any **Swagger / OpenAPI** spec into a **hosted MCP server** — with a
 human-in-the-loop review step in between.
 
+[![CI](https://github.com/seelamraviteja/SethuAI/actions/workflows/ci.yml/badge.svg)](https://github.com/seelamraviteja/SethuAI/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776ab)
+![Node 18+](https://img.shields.io/badge/node-18%2B-339933)
+
 <img src="docs/01-landing.png" width="760" alt="SethuAI landing page" />
 
 </div>
@@ -143,7 +148,26 @@ export SETHU_MCP_TOKEN="<random>"                # required for MCP clients to c
   `backend/data/.sethu_key` for dev convenience — **set it explicitly in production.**
 
 **Enterprise features built in:** 🔐 encrypted secrets at rest · 🔑 token-gated API
-& MCP surfaces · 📜 full audit log of every proxied call (shown in **Activity**).
+& MCP surfaces · 📜 full audit log of every proxied call (shown in **Activity**) ·
+🛡️ SSRF protection on outbound calls.
+
+### All configuration
+
+Every knob is an environment variable; sensible defaults mean you usually set none.
+
+| Variable | Default | What it does |
+|----------|---------|--------------|
+| `SETHU_SECRET_KEY` | generated | Encryption key for secrets at rest |
+| `SETHU_ADMIN_TOKEN` | _(open)_ | Gates the management API / UI |
+| `SETHU_MCP_TOKEN` | _(open)_ | Gates the hosted MCP endpoint |
+| `SETHU_BLOCK_PRIVATE_HOSTS` | on when `SETHU_MCP_TOKEN` is set | Refuse proxied calls to private/loopback/link-local IPs (SSRF guard). Set `1`/`0` to force |
+| `SETHU_HTTP_TIMEOUT` | `30` | Default per-request timeout (s) for proxied calls; override per tool in the editor |
+| `SETHU_MAX_RESPONSE_CHARS` | `50000` | Cap on response size returned to the model (JSON arrays truncate by item) |
+| `SETHU_AUDIT_MAX_BYTES` | `5000000` | Size at which `audit.log` rotates to `audit.log.1` |
+
+> **SSRF note:** in open dev mode the guard is **off** so local backends
+> (`localhost`, `127.0.0.1`) stay testable. It turns on automatically once
+> `SETHU_MCP_TOKEN` is set — i.e. a production posture.
 
 ## Docker
 
@@ -169,14 +193,17 @@ backend/app/
   generator.py     OpenAPI -> Catalog (tools)
   mcp_runtime.py   low-level MCP server + HTTP proxy + audit (the /mcp endpoint)
   api.py           management REST API (admin-token gated)
-  storage.py       JSON persistence (secrets encrypted at rest)
+  storage.py       JSON persistence + mtime cache (secrets encrypted at rest)
   crypto.py        Fernet encrypt/decrypt for secrets
-  audit.py         append-only JSONL audit log
-  security.py      admin / MCP token checks
+  audit.py         append-only JSONL audit log (size-rotated)
+  security.py      admin / MCP token checks (constant-time compare)
+  net.py           SSRF guard for outbound proxied calls
+  config.py        env-driven settings (timeouts, limits, SSRF toggle)
   models.py        pydantic models
   main.py          FastAPI app wiring UI + API + MCP
+backend/tests/     pytest suite (generator, net, storage, crypto, runtime, security)
 frontend/src/      React + Vite + Tailwind UI (assets/ holds the SethuAI logos)
-run.sh / dev.sh    launchers · Dockerfile · docs/ (screenshots)
+run.sh / dev.sh    launchers · Dockerfile · docs/ (screenshots) · .github/ (CI)
 ```
 
 ## Limitations (honest)
@@ -185,7 +212,8 @@ run.sh / dev.sh    launchers · Dockerfile · docs/ (screenshots)
   No per-user OAuth token passthrough yet.
 - **No rate limiting / RBAC / multi-tenant isolation** yet — the audit choke point
   (`mcp_runtime.invoke`) and token layer are the natural places to add them.
-- **Response shaping is basic** (50k-char truncation); no per-tool field selection.
+- **Response shaping is basic** — JSON arrays truncate by item (staying valid
+  JSON), everything else is a char cut; no per-tool field selection yet.
 - **Not representable as tools:** webhooks/callbacks, binary uploads, server-push
   streaming. Complex `oneOf`/`anyOf` schemas pass through as-is.
 - **Best for small APIs (<30 endpoints).** Larger specs need tool grouping / dynamic
